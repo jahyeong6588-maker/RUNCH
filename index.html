@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RUNCH — 직장인들의 식사는 RUN!</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&display=swap">
+<link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+<header>
+  <div class="wrap bar">
+    <div class="logo-group">
+      <span class="logo brand-font">RUNCH</span>
+      <span class="tag">Lunch Recommendation Assistant</span>
+    </div>
+    <div class="header-right">
+      <span class="loc-pill">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.4"/></svg>
+        광주광역시 광산구
+      </span>
+      <button class="menu-link" id="calendarLink">캘린더</button>
+      <button class="menu-link" id="menuLink">커뮤니티</button>
+      <button class="btn-pill-strong" id="openLogin">로그인</button>
+      <div class="user-chip" id="userChip" hidden>
+        <span id="userEmail"></span>
+        <button id="logoutBtn">로그아웃</button>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="wrap">
+      <div class="eyebrow-line">직장인의 식사는 <span class="badge-runch brand-font">RUNCH</span></div>
+      <h1 class="hero-h1">오늘도 스마트한 점심 추천 메뉴</h1>
+      <p class="hero-sub">카카오맵 실시간 데이터로 찾는 우리 회사 근처 점심</p>
+
+      <div class="tag-row">
+        <button class="tagchip" data-quick-tag="fav">⭐ 나의 즐겨찾기</button>
+        <button class="tagchip" data-quick-tag="fast">💥 줄 안서도 되는 빠른 식사</button>
+        <button class="tagchip" data-quick-tag="soup">🍲 오늘같은 날은 국물</button>
+        <button class="tagchip" data-quick-tag="cafe">☕ 커피 한잔 하기 좋은 곳</button>
+        <button class="tagchip" data-quick-tag="shuffle">🔄 다시 추천받기</button>
+      </div>
+
+      <button class="hangover-banner" id="hangoverBanner" hidden></button>
+
+      <div class="search-card">
+        <div class="field-label">회사 위치</div>
+        <div class="loc-field">
+          <div class="loc-input-row">
+            <input id="locationInput" type="text" value="한국전자기술연구원" autocomplete="off" aria-label="회사 위치">
+            <button class="btn-dark-sm" id="locSearchBtn">검색</button>
+          </div>
+          <div class="loc-suggestions" id="locSuggestions" hidden></div>
+        </div>
+        <div class="resolved-loc" id="resolvedLoc"></div>
+
+        <div class="field-label">예산 (1인당)</div>
+        <div class="budget-stepper">
+          <button id="budgetPrev" aria-label="예산 낮추기" disabled>&lt;</button>
+          <span class="val" id="budgetVal">~1.2만원</span>
+          <button id="budgetNext" aria-label="예산 높이기" disabled>&gt;</button>
+        </div>
+        <p class="field-note">카카오맵은 가격 정보를 제공하지 않아요 — RUNCH 자체 데이터가 쌓이면 연동할게요.</p>
+
+        <div class="field-row-2">
+          <div>
+            <div class="field-label">성비</div>
+            <select class="select-field" id="genderSelect" disabled>
+              <option value="mixed">혼성</option>
+              <option value="male">남초</option>
+              <option value="female">여초</option>
+            </select>
+          </div>
+          <div>
+            <div class="field-label">직급</div>
+            <select class="select-field" id="rankSelect" disabled>
+              <option value="staff">직원만</option>
+              <option value="boss">상사와 함께</option>
+              <option value="guest">외부 손님과 함께</option>
+            </select>
+          </div>
+        </div>
+        <p class="field-note">성비·직급 맞춤 추천은 RUNCH 자체 데이터가 쌓이면 연동돼요.</p>
+
+        <div class="field-label">추가 조건</div>
+        <label class="check-row"><input type="checkbox" id="chkHangover" disabled> 해장이 필요해요</label>
+        <label class="check-row"><input type="checkbox" id="chkParking" disabled> 주차장이 필요해요</label>
+        <label class="check-row"><input type="checkbox" id="chkRoom" disabled> 룸 필요해요</label>
+
+        <div class="field-label">메뉴 종류</div>
+        <div class="cat-row">
+          <select class="select-field" id="catSelect" disabled>
+            <option value="한식">한식</option>
+            <option value="중식">중식</option>
+            <option value="일식">일식</option>
+            <option value="양식">양식</option>
+            <option value="분식">분식</option>
+            <option value="카페">카페</option>
+          </select>
+          <label class="check-row" style="opacity:1"><input type="checkbox" id="chkAnyCat" checked> 상관 없어요</label>
+        </div>
+
+        <button class="cta-strong brand-font" id="searchBtn">RUNCH TODAY</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="wrap">
+      <div class="block-head"><h2>지금 근처 직장인들은 이걸 먹고 있어요</h2></div>
+      <p class="field-note" style="margin:0 0 18px;">※ 아래 순위는 예시 데이터예요. 실제 이용 데이터가 쌓이면 실시간 순위로 교체할게요.</p>
+    </div>
+  </section>
+</main>
+
+<footer><div class="wrap">RUNCH · 직장인들의 식사는 RUN! · 카카오맵 연동 프로토타입</div></footer>
+
+<!-- RESULTS MODAL -->
+<div class="modal-backdrop" id="resultsModal" hidden>
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>오늘의 점심 추천</h3>
+      <div class="seg-3" id="cafeSeg" role="radiogroup" aria-label="카페 표시 옵션">
+        <button data-seg="exclude" aria-pressed="true">카페 제외</button>
+        <button data-seg="include" aria-pressed="false">카페 함께 보기</button>
+        <button data-seg="only" aria-pressed="false">카페만 보기</button>
+      </div>
+      <button class="close-x" id="closeResults" aria-label="닫기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div id="kakaoMap"></div>
+    <div class="result-status" id="resultStatus"></div>
+    <div class="result-grid" id="resultGrid"></div>
+  </div>
+</div>
+
+<!-- AUTH MODAL -->
+<div class="modal-backdrop" id="authModal" hidden>
+  <div class="modal-card narrow">
+    <div class="modal-head">
+      <div class="auth-tabtitle">
+        <h3 id="authTitle">로그인</h3>
+        <button class="modal-toplink" id="authSwitch">회원가입으로</button>
+      </div>
+      <button class="close-x" id="closeAuth" aria-label="닫기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="auth-field"><input id="authEmail" type="email" placeholder="이메일" aria-label="이메일"></div>
+    <div class="auth-field"><input id="authPassword" type="password" placeholder="비밀번호 (6자 이상)" aria-label="비밀번호"></div>
+    <p class="field-note" id="authNote"></p>
+    <button class="btn-accent-full" id="authSubmit">로그인</button>
+  </div>
+</div>
+
+<!-- CALENDAR MODAL -->
+<div class="modal-backdrop" id="calendarModal" hidden>
+  <div class="modal-card">
+    <div class="modal-head">
+      <h3>식사 캘린더</h3>
+      <button class="close-x" id="closeCalendar" aria-label="닫기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div id="calendarLoggedOut" class="field-note">로그인 후 이용할 수 있어요.</div>
+    <div id="calendarLoggedIn" hidden>
+      <div class="cal-form">
+        <input type="date" id="calDate" aria-label="날짜">
+        <select class="select-field" id="calType" aria-label="종류">
+          <option value="식대">식대</option>
+          <option value="회식">회식</option>
+          <option value="개인메모">개인메모</option>
+        </select>
+        <input type="number" id="calAmount" placeholder="금액(선택)" aria-label="금액">
+        <input type="text" id="calMemo" placeholder="메모 (예: 상사 식사 평, 장소 등)" aria-label="메모">
+        <button class="btn-dark-sm" id="calAddBtn">추가</button>
+      </div>
+      <div class="cal-list" id="calList"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=aed7bfc41462b623a6769a20daa332fa&libraries=services&autoload=false"></script>
+<script src="./app.js"></script>
+</body>
+</html>
