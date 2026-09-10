@@ -163,27 +163,52 @@
 
 <!-- CALENDAR MODAL -->
 <div class="modal-backdrop" id="calendarModal" hidden>
-  <div class="modal-card">
+  <div class="modal-card cal-card">
     <div class="modal-head">
-      <h3>식사 캘린더</h3>
+      <h3>점심 캘린더</h3>
+      <div class="cal-total"><span id="calTotalLabel">2026년 9월</span> 식비 합계 <strong id="calTotal">0원</strong></div>
       <button class="close-x" id="closeCalendar" aria-label="닫기">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
     <div id="calendarLoggedOut" class="field-note">로그인 후 이용할 수 있어요.</div>
     <div id="calendarLoggedIn" hidden>
-      <div class="cal-form">
-        <input type="date" id="calDate" aria-label="날짜">
-        <select class="select-field" id="calType" aria-label="종류">
-          <option value="식대">식대</option>
-          <option value="회식">회식</option>
-          <option value="개인메모">개인메모</option>
-        </select>
-        <input type="number" id="calAmount" placeholder="금액(선택)" aria-label="금액">
-        <input type="text" id="calMemo" placeholder="메모 (예: 상사 식사 평, 장소 등)" aria-label="메모">
-        <button class="btn-dark-sm" id="calAddBtn">추가</button>
+      <div class="cal-layout">
+        <div class="cal-left">
+          <div class="cal-nav">
+            <button type="button" id="calPrevMonth" aria-label="이전 달">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <div class="cal-month" id="calMonthTitle">2026년 9월</div>
+            <button type="button" id="calNextMonth" aria-label="다음 달">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+          </div>
+          <div class="cal-weekdays"><span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span></div>
+          <div class="cal-grid" id="calGrid"></div>
+          <div class="cal-legend">
+            <span><i class="cal-dot dot-record"></i>식사 기록 있음</span>
+            <span><i class="cal-dot dot-new"></i>NEW 식당</span>
+            <span><i class="cal-dot dot-boss"></i>상사 회식날</span>
+          </div>
+          <button type="button" class="btn-outline-sm" id="bossDinnerBtn">상사 회식날 등록</button>
+        </div>
+        <div class="cal-right">
+          <div class="cal-section">
+            <div class="cal-section-head"><div class="cal-section-title">메모</div><div class="cal-section-sub">투두 / 기록</div></div>
+            <textarea id="calMemo" class="cal-textarea" placeholder="오늘 점심/할 일/기록을 적어보세요" aria-label="메모"></textarea>
+            <button type="button" class="btn-dark-full" id="calMemoSaveBtn">메모 저장</button>
+          </div>
+          <div class="cal-section">
+            <div class="cal-section-head"><div class="cal-section-title">점심 기록</div></div>
+            <input type="text" id="calRestaurant" class="cal-input" placeholder="가게 상호명" aria-label="가게 상호명">
+            <input type="text" id="calMenu" class="cal-input" placeholder="메뉴 이름" aria-label="메뉴 이름">
+            <input type="number" id="calPrice" class="cal-input" placeholder="점심값 (숫자만)" aria-label="점심값" inputmode="numeric">
+            <label class="check-row" style="opacity:1"><input type="checkbox" id="calIsNew"> 처음 가본 식당이에요 (NEW)</label>
+            <button type="button" class="btn-accent-full" id="calRecordSaveBtn">기록 저장</button>
+          </div>
+        </div>
       </div>
-      <div class="cal-list" id="calList"></div>
     </div>
   </div>
 </div>

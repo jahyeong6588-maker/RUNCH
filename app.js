@@ -209,7 +209,7 @@
     $("#authTitle").textContent = authMode === "login" ? "로그인" : "회원가입";
     $("#authSwitch").textContent = authMode === "login" ? "회원가입으로" : "로그인으로";
     $("#authSubmit").textContent = authMode === "login" ? "로그인" : "회원가입";
-    $("#authNote").textContent = authMode === "signup" ? "가입 후 이메일로 오는 확인 링크를 눌러야 로그인할 수 있어요." : "";
+    $("#authNote").textContent = "";
   }
   $("#openLogin").addEventListener("click", function () {
     authMode = "login"; renderAuth();
@@ -229,7 +229,7 @@
     if (authMode === "signup") {
       sb.auth.signUp({ email: email, password: password }).then(function (res) {
         if (res.error) { toast(res.error.message); return; }
-        toast("가입 요청을 보냈어요. 이메일을 확인해주세요.");
+        toast("가입됐어요! 바로 이용할 수 있어요.");
         $("#authModal").hidden = true;
       });
     } else {
@@ -253,7 +253,7 @@
     if (user) $("#userEmail").textContent = user.email;
     $("#calendarLoggedOut").hidden = !!user;
     $("#calendarLoggedIn").hidden = !user;
-    if (user) { fetchEntries(); }
+    if (user) { checkHangoverBanner(); }
   }
 
   if (sb) {
@@ -261,76 +261,172 @@
     sb.auth.onAuthStateChange(function (_event, session) { updateAuthUI(session ? session.user : null); });
   }
 
-  /* ---------- 캘린더 (식대·회식 기록) ---------- */
+  /* ---------- 캘린더 (점심 기록 · 메모 · 상사 회식날) ---------- */
+  function pad2(n) { return n < 10 ? "0" + n : "" + n; }
+  function fmtDate(y, m, d) { return y + "-" + pad2(m + 1) + "-" + pad2(d); } // m: 0-indexed
+  function todayStr() { var t = new Date(); return fmtDate(t.getFullYear(), t.getMonth(), t.getDate()); }
+
+  var calState = {
+    year: null, month: null,          // 현재 보고 있는 달 (month: 0-indexed)
+    selected: null,                    // 선택된 날짜 문자열
+    daysMap: {}                        // { "YYYY-MM-DD": row }
+  };
+
   $("#calendarLink").addEventListener("click", function () {
     $("#calendarModal").hidden = false;
     if (!currentUser) return;
-    if (!$("#calDate").value) $("#calDate").value = new Date().toISOString().slice(0, 10);
+    if (calState.year === null) {
+      var t = new Date();
+      calState.year = t.getFullYear();
+      calState.month = t.getMonth();
+      calState.selected = todayStr();
+    }
+    fetchCalendarMonth();
   });
   $("#closeCalendar").addEventListener("click", function () { $("#calendarModal").hidden = true; });
   $("#calendarModal").addEventListener("click", function (e) { if (e.target === e.currentTarget) e.currentTarget.hidden = true; });
 
-  function fetchEntries() {
-    if (!sb || !currentUser) return;
-    sb.from("calendar_entries").select("*").order("entry_date", { ascending: false }).then(function (res) {
-      if (res.error) { toast("불러오기 실패: " + res.error.message); return; }
-      renderEntries(res.data || []);
-      checkHangoverBanner(res.data || []);
-    });
+  $("#calPrevMonth").addEventListener("click", function () { shiftMonth(-1); });
+  $("#calNextMonth").addEventListener("click", function () { shiftMonth(1); });
+  function shiftMonth(delta) {
+    var d = new Date(calState.year, calState.month + delta, 1);
+    calState.year = d.getFullYear();
+    calState.month = d.getMonth();
+    fetchCalendarMonth();
   }
 
-  function renderEntries(list) {
-    var el = $("#calList");
-    if (!list.length) { el.innerHTML = '<div class="cal-empty">아직 기록이 없어요. 위에서 하나 추가해보세요.</div>'; return; }
-    el.innerHTML = list.map(function (e) {
-      return '<div class="cal-item">' +
-        '<div class="c-main"><span class="c-date">' + e.entry_date + '</span><span class="c-type">' + e.entry_type + '</span>' +
-        (e.memo ? '<div class="c-memo">' + e.memo + '</div>' : '') + '</div>' +
-        '<div style="display:flex;align-items:center;gap:10px;">' +
-        (e.amount ? '<span class="c-amount">' + Number(e.amount).toLocaleString("ko-KR") + '원</span>' : '') +
-        '<button class="c-del" data-del="' + e.id + '">삭제</button></div>' +
-        '</div>';
-    }).join("");
+  function fetchCalendarMonth() {
+    if (!sb || !currentUser) return;
+    var y = calState.year, m = calState.month;
+    var first = fmtDate(y, m, 1);
+    var last = fmtDate(y, m, new Date(y, m + 1, 0).getDate());
+    sb.from("calendar_days").select("*")
+      .gte("entry_date", first).lte("entry_date", last)
+      .then(function (res) {
+        if (res.error) { toast("불러오기 실패: " + res.error.message); return; }
+        calState.daysMap = {};
+        (res.data || []).forEach(function (row) { calState.daysMap[row.entry_date] = row; });
+        renderCalendarGrid();
+        selectDate(calState.selected);
+        updateCalTotal();
+      });
   }
 
-  $("#calList").addEventListener("click", function (e) {
-    var btn = e.target.closest("[data-del]");
-    if (!btn || !sb) return;
-    sb.from("calendar_entries").delete().eq("id", btn.dataset.del).then(function (res) {
-      if (res.error) { toast("삭제 실패: " + res.error.message); return; }
-      fetchEntries();
+  function updateCalTotal() {
+    var sum = 0;
+    Object.keys(calState.daysMap).forEach(function (k) {
+      var p = calState.daysMap[k].price;
+      if (p) sum += Number(p);
     });
-  });
+    $("#calTotalLabel").textContent = calState.year + "년 " + (calState.month + 1) + "월";
+    $("#calTotal").textContent = sum.toLocaleString("ko-KR") + "원";
+  }
 
-  $("#calAddBtn").addEventListener("click", function () {
-    if (!sb || !currentUser) return;
-    var entry = {
-      user_id: currentUser.id,
-      entry_date: $("#calDate").value || new Date().toISOString().slice(0, 10),
-      entry_type: $("#calType").value,
-      amount: $("#calAmount").value ? Number($("#calAmount").value) : null,
-      memo: $("#calMemo").value.trim() || null
-    };
-    sb.from("calendar_entries").insert(entry).then(function (res) {
-      if (res.error) { toast("저장 실패: " + res.error.message); return; }
-      $("#calAmount").value = ""; $("#calMemo").value = "";
-      fetchEntries();
-      toast("기록했어요.");
-    });
-  });
+  function renderCalendarGrid() {
+    var y = calState.year, m = calState.month;
+    $("#calMonthTitle").textContent = y + "년 " + (m + 1) + "월";
+    var firstWeekday = new Date(y, m, 1).getDay();
+    var numDays = new Date(y, m + 1, 0).getDate();
+    var tStr = todayStr();
 
-  function checkHangoverBanner(list) {
-    var y = new Date(); y.setDate(y.getDate() - 1);
-    var yStr = y.toISOString().slice(0, 10);
-    var had = list.some(function (e) { return e.entry_type === "회식" && e.entry_date === yStr; });
-    var banner = $("#hangoverBanner");
-    if (had) {
-      banner.hidden = false;
-      banner.textContent = "🥣 어제 회식 기록이 있네요 — 오늘은 해장 메뉴 어때요?";
-      banner.onclick = function () { runSearch("soup"); };
-    } else {
-      banner.hidden = true;
+    var html = "";
+    for (var i = 0; i < firstWeekday; i++) html += '<div class="cal-day is-blank"></div>';
+    for (var d = 1; d <= numDays; d++) {
+      var dateStr = fmtDate(y, m, d);
+      var row = calState.daysMap[dateStr];
+      var isToday = dateStr === tStr;
+      var isSelected = dateStr === calState.selected;
+      var dots = "";
+      if (row) {
+        if (row.restaurant_name) dots += '<span class="cal-dot dot-record"></span>';
+        if (row.is_new) dots += '<span class="cal-dot dot-new"></span>';
+        if (row.is_boss_dinner) dots += '<span class="cal-dot dot-boss"></span>';
+      }
+      html += '<button type="button" class="cal-day' + (isToday ? " is-today" : "") + (isSelected ? " is-selected" : "") + '" data-date="' + dateStr + '">' +
+        '<span class="d-num">' + d + '</span>' +
+        (isToday ? '<span class="d-today-label">오늘</span>' : '') +
+        '<span class="d-dots">' + dots + '</span>' +
+        '</button>';
     }
+    $("#calGrid").innerHTML = html;
+  }
+
+  $("#calGrid").addEventListener("click", function (e) {
+    var btn = e.target.closest(".cal-day:not(.is-blank)");
+    if (!btn) return;
+    selectDate(btn.dataset.date);
+    $$(".cal-day").forEach(function (b) { b.classList.toggle("is-selected", b === btn); });
+  });
+
+  function selectDate(dateStr) {
+    calState.selected = dateStr;
+    var row = calState.daysMap[dateStr] || {};
+    $("#calMemo").value = row.memo || "";
+    $("#calRestaurant").value = row.restaurant_name || "";
+    $("#calMenu").value = row.menu_name || "";
+    $("#calPrice").value = row.price || "";
+    $("#calIsNew").checked = !!row.is_new;
+    var bossBtn = $("#bossDinnerBtn");
+    bossBtn.classList.toggle("active", !!row.is_boss_dinner);
+    bossBtn.textContent = row.is_boss_dinner ? "상사 회식날 해제" : "상사 회식날 등록";
+  }
+
+  $("#calMemoSaveBtn").addEventListener("click", function () {
+    if (!sb || !currentUser || !calState.selected) return;
+    sb.from("calendar_days").upsert({
+      user_id: currentUser.id, entry_date: calState.selected, memo: $("#calMemo").value.trim() || null
+    }, { onConflict: "user_id,entry_date" }).then(function (res) {
+      if (res.error) { toast("저장 실패: " + res.error.message); return; }
+      toast("메모를 저장했어요.");
+      fetchCalendarMonth();
+    });
+  });
+
+  $("#calRecordSaveBtn").addEventListener("click", function () {
+    if (!sb || !currentUser || !calState.selected) return;
+    var restaurant = $("#calRestaurant").value.trim();
+    if (!restaurant) { toast("가게 상호명을 입력해주세요."); return; }
+    sb.from("calendar_days").upsert({
+      user_id: currentUser.id, entry_date: calState.selected,
+      restaurant_name: restaurant,
+      menu_name: $("#calMenu").value.trim() || null,
+      price: $("#calPrice").value ? Number($("#calPrice").value) : null,
+      is_new: $("#calIsNew").checked
+    }, { onConflict: "user_id,entry_date" }).then(function (res) {
+      if (res.error) { toast("저장 실패: " + res.error.message); return; }
+      toast("점심 기록을 저장했어요.");
+      fetchCalendarMonth();
+    });
+  });
+
+  $("#bossDinnerBtn").addEventListener("click", function () {
+    if (!sb || !currentUser || !calState.selected) return;
+    var current = calState.daysMap[calState.selected];
+    var next = !(current && current.is_boss_dinner);
+    sb.from("calendar_days").upsert({
+      user_id: currentUser.id, entry_date: calState.selected, is_boss_dinner: next
+    }, { onConflict: "user_id,entry_date" }).then(function (res) {
+      if (res.error) { toast("저장 실패: " + res.error.message); return; }
+      toast(next ? "상사 회식날로 등록했어요." : "상사 회식날을 해제했어요.");
+      fetchCalendarMonth();
+      checkHangoverBanner();
+    });
+  });
+
+  function checkHangoverBanner() {
+    if (!sb || !currentUser) return;
+    var y = new Date(); y.setDate(y.getDate() - 1);
+    var yStr = fmtDate(y.getFullYear(), y.getMonth(), y.getDate());
+    sb.from("calendar_days").select("is_boss_dinner").eq("entry_date", yStr).eq("is_boss_dinner", true).then(function (res) {
+      var banner = $("#hangoverBanner");
+      if (!res.error && res.data && res.data.length) {
+        banner.hidden = false;
+        banner.textContent = "🥣 어제 회식 기록이 있네요 — 오늘은 해장 메뉴 어때요?";
+        banner.onclick = function () { runSearch("soup"); };
+      } else {
+        banner.hidden = true;
+      }
+    });
   }
 
   /* ---------- 결과 모달 + 지도 ---------- */
