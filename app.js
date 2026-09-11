@@ -24,6 +24,7 @@
     lastSearchKind: null, // for the "다시 추천받기" shuffle tag
     map: null,
     markers: [],
+    parkingMarkers: [],
     searchMode: "meal",     // "meal" | "dinner"
     timeOfDay: "lunch",     // "lunch" | "evening"
     dinnerBudget: null,
@@ -592,9 +593,23 @@
     return fee.type || "요금 정보 없음";
   }
 
+  function parkingMarkerImage() {
+    var svg = '<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26">' +
+      '<circle cx="13" cy="13" r="11" fill="#2F6FE0" stroke="white" stroke-width="2.5"/>' +
+      '<text x="13" y="18" font-size="13" font-weight="700" fill="white" text-anchor="middle" font-family="sans-serif">P</text>' +
+      '</svg>';
+    return new kakao.maps.MarkerImage("data:image/svg+xml;utf8," + encodeURIComponent(svg), new kakao.maps.Size(26, 26));
+  }
+
+  function clearParkingMarkers() {
+    (state.parkingMarkers || []).forEach(function (m) { m.setMap(null); });
+    state.parkingMarkers = [];
+  }
+
   function renderNearbyParking() {
     var section = $("#parkingSection");
     var row = $("#parkingRow");
+    clearParkingMarkers();
     if (!state.office) { section.hidden = true; return; }
     var region = regionKeyFromAddress(state.office.address);
     loadParkingRegion(region, function (list) {
@@ -620,6 +635,21 @@
             '<div class="p-meta">' + escapeHtml(lines.join(" · ")) + '</div>' +
           '</div>';
       }).join("");
+
+      // 지도에도 파란 P 마커로 표시 (renderMap이 먼저 끝나 있어야 해서 state.map 존재 여부를 확인해요)
+      if (state.map && kakaoReady) {
+        withDist.forEach(function (x) {
+          var p = x.p;
+          var pos = new kakao.maps.LatLng(p.lat, p.lng);
+          var marker = new kakao.maps.Marker({ position: pos, map: state.map, image: parkingMarkerImage(), zIndex: 1 });
+          var iw = new kakao.maps.InfoWindow({
+            content: '<div style="padding:6px 10px;font-size:12px;white-space:nowrap;">' +
+              '🅿️ ' + escapeHtml(p.n) + '<br>' + x.dist + 'm · ' + escapeHtml(feeSummary(p.fee) || "요금 정보 없음") + '</div>'
+          });
+          kakao.maps.event.addListener(marker, "click", function () { iw.open(state.map, marker); });
+          state.parkingMarkers.push(marker);
+        });
+      }
     });
   }
 
@@ -647,6 +677,7 @@
   function renderMap(list) {
     var container = $("#kakaoMap");
     var center = new kakao.maps.LatLng(state.office.lat, state.office.lng);
+    clearParkingMarkers();
     state.map = new kakao.maps.Map(container, { center: center, level: 5 });
 
     state.markers.forEach(function (m) { m.setMap(null); });
