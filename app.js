@@ -24,8 +24,12 @@
     lastSearchKind: null, // for the "다시 추천받기" shuffle tag
     map: null,
     markers: [],
-    dinnerTime: "evening",
-    dinnerBudget: null
+    searchMode: "meal",     // "meal" | "dinner"
+    timeOfDay: "lunch",     // "lunch" | "evening"
+    dinnerBudget: null,
+    dinnerHeadcount: null,
+    placeNotes: {},         // { placeId: { has_parking, has_room, hangover_menu, hours_note } } aggregated
+    activeNotePlace: null   // 정보 추가 모달 대상
   };
 
   var geocoder = null;
@@ -168,6 +172,26 @@
     if (e.key === "Escape") hideSuggestions();
   });
 
+  /* ---------- 검색 모드 토글 (식사 / 회식) + 시간대 ---------- */
+  $$("#searchModeSeg button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      state.searchMode = b.dataset.mode;
+      $$("#searchModeSeg button").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+      var isDinner = state.searchMode === "dinner";
+      $("#mealOnlyFields").hidden = isDinner;
+      $("#dinnerOnlyFields").hidden = !isDinner;
+      $$("#timeSeg button[data-seg='lunch']")[0].textContent = isDinner ? "점심 회식" : "점심식사";
+      $$("#timeSeg button[data-seg='evening']")[0].textContent = isDinner ? "저녁 회식" : "저녁식사";
+    });
+  });
+  $$("#timeSeg button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      state.timeOfDay = b.dataset.seg;
+      $$("#timeSeg button").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+    });
+  });
+  $("#chkAnyCat").addEventListener("change", function () { $("#catSelect").disabled = $("#chkAnyCat").checked; });
+
   /* ---------- 식당 검색 ---------- */
   var CAT_FOOD = "FD6";
   var CAT_CAFE = "CE7";
@@ -185,6 +209,7 @@
 
     var anyCat = $("#chkAnyCat").checked;
     var category = $("#catSelect").value;
+    var wantHangover = $("#chkHangover").checked;
 
     var tasks = [];
 
@@ -197,12 +222,15 @@
       state.cafeSeg = "only"; syncCafeSegUI();
       tasks.push(searchOnce(function (cb) { places.categorySearch(CAT_CAFE, cb, opts); }));
     } else if (kind === "dinner") {
-      var dinnerKw = (state.dinnerTime === "lunch" ? "점심 회식" : "저녁 회식") + " 맛집";
+      var dinnerKw = (state.timeOfDay === "lunch" ? "점심 회식" : "저녁 회식") + " 맛집";
       tasks.push(searchOnce(function (cb) { places.keywordSearch(dinnerKw, cb, Object.assign({ category_group_code: CAT_FOOD }, opts)); }));
     } else {
       if (wantFood()) {
         if (!anyCat) {
-          tasks.push(searchOnce(function (cb) { places.keywordSearch(category + " 맛집", cb, Object.assign({ category_group_code: CAT_FOOD }, opts)); }));
+          var timeWord = state.timeOfDay === "evening" ? " 저녁" : "";
+          tasks.push(searchOnce(function (cb) { places.keywordSearch(category + timeWord + " 맛집", cb, Object.assign({ category_group_code: CAT_FOOD }, opts)); }));
+        } else if (state.timeOfDay === "evening") {
+          tasks.push(searchOnce(function (cb) { places.keywordSearch("저녁 맛집", cb, Object.assign({ category_group_code: CAT_FOOD }, opts)); }));
         } else {
           tasks.push(searchOnce(function (cb) { places.categorySearch(CAT_FOOD, cb, opts); }));
         }
@@ -212,6 +240,11 @@
       }
     }
 
+    // 해장 필요 체크 시, 해장 관련 검색을 추가로 섞어줘요 (카카오 API는 메뉴 태그가 없어 키워드 기반 추천이에요)
+    if (wantHangover && kind !== "soup") {
+      tasks.push(searchOnce(function (cb) { places.keywordSearch("해장 국밥 짬뽕", cb, Object.assign({ category_group_code: CAT_FOOD }, opts)); }));
+    }
+
     $("#resultStatus").textContent = "검색 중이에요…";
     Promise.all(tasks).then(function (lists) {
       var merged = [].concat.apply([], lists);
@@ -219,7 +252,7 @@
       var seen = {};
       merged = merged.filter(function (p) { if (seen[p.id]) return false; seen[p.id] = true; return true; });
       merged.sort(function (a, b) { return Number(a.distance) - Number(b.distance); });
-      openResultsModal(merged);
+      applyPlaceNotesAndOpen(merged);
     });
   }
 
@@ -232,7 +265,45 @@
     });
   }
 
-  $("#searchBtn").addEventListener("click", function () { runSearch("default"); });
+  /* ---------- 크라우드소싱: 가게 정보 태그 (place_notes) ----------
+     카카오 로컬 API는 영업시간·주차·룸 정보를 제공하지 않아서,
+     RUNCH 이용자가 직접 태그한 데이터를 모아 필터링/뱃지에 사용해요. */
+  function fetchPlaceNotes(placeIds, onDone) {
+    if (!sb || !placeIds.length) { onDone({}); return; }
+    sb.from("place_notes").select("*").in("place_id", placeIds).then(function (res) {
+      var agg = {};
+      if (!res.error && res.data) {
+        res.data.forEach(function (row) {
+          var a = agg[row.place_id] || { has_parking: false, has_room: false, hangover_menu: false, hours_note: null, _t: null };
+          if (row.has_parking) a.has_parking = true;
+          if (row.has_room) a.has_room = true;
+          if (row.hangover_menu) a.hangover_menu = true;
+          if (row.hours_note && (!a._t || (row.updated_at && row.updated_at > a._t))) {
+            a.hours_note = row.hours_note;
+            a._t = row.updated_at || a._t;
+          }
+          agg[row.place_id] = a;
+        });
+      }
+      onDone(agg);
+    }, function () { onDone({}); });
+  }
+
+  function applyPlaceNotesAndOpen(merged) {
+    var ids = merged.map(function (p) { return p.id; });
+    fetchPlaceNotes(ids, function (agg) {
+      state.placeNotes = agg;
+      var wantParking = $("#chkParking").checked;
+      var wantRoom = $("#chkRoom").checked;
+      var filtered = merged;
+      if (wantParking) filtered = filtered.filter(function (p) { return agg[p.id] && agg[p.id].has_parking; });
+      if (wantRoom) filtered = filtered.filter(function (p) { return agg[p.id] && agg[p.id].has_room; });
+      state.filterEmptyByTag = (wantParking || wantRoom) && merged.length > 0 && filtered.length === 0;
+      openResultsModal(filtered);
+    });
+  }
+
+  $("#searchBtn").addEventListener("click", function () { runSearch(state.searchMode === "dinner" ? "dinner" : "default"); });
   $$(".tagchip").forEach(function (chip) {
     chip.addEventListener("click", function () {
       var tag = chip.dataset.quickTag;
@@ -244,29 +315,13 @@
   });
   $("#menuLink").addEventListener("click", function () { toast("커뮤니티는 다음 업데이트에서 만나요"); });
 
-  /* ---------- 회식 장소 찾기 모드 ---------- */
-  $("#openDinnerMode").addEventListener("click", function () { $("#dinnerModal").hidden = false; });
-  $("#closeDinner").addEventListener("click", function () { $("#dinnerModal").hidden = true; });
-  $("#dinnerModal").addEventListener("click", function (e) { if (e.target === e.currentTarget) e.currentTarget.hidden = true; });
-  $$("#dinnerTimeSeg button").forEach(function (b) {
-    b.addEventListener("click", function () {
-      state.dinnerTime = b.dataset.seg;
-      $$("#dinnerTimeSeg button").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
-    });
-  });
-  $("#dinnerSearchBtn").addEventListener("click", function () {
-    state.dinnerBudget = $("#dinnerBudget").value ? Number($("#dinnerBudget").value) : null;
-    $("#dinnerModal").hidden = true;
-    runSearch("dinner");
-  });
-
-  /* ---------- 화면 전환 (보스키 / 엑셀 모드) ---------- */
+  /* ---------- 엑셀 배경 모드 (보스키) ----------
+     런치 화면/기능은 그대로 두고, 배경과 상단 리본만 엑셀처럼 바꿔요. */
   function toggleExcelMode(force) {
-    var el = $("#excelOverlay");
-    el.hidden = (typeof force === "boolean") ? !force : !el.hidden;
+    var on = (typeof force === "boolean") ? force : !document.body.classList.contains("excel-bg");
+    document.body.classList.toggle("excel-bg", on);
   }
   $("#bossKeyBtn").addEventListener("click", function () { toggleExcelMode(); });
-  $("#excelOverlay").addEventListener("click", function () { toggleExcelMode(false); });
   document.addEventListener("keydown", function (e) {
     if (e.key === "Escape") toggleExcelMode();
   });
@@ -549,6 +604,29 @@
     return parts[parts.length - 1] || catName || "";
   }
 
+  function escapeHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c];
+    });
+  }
+
+  function noteBadgesHtml(p) {
+    var n = state.placeNotes[p.id];
+    if (!n) return "";
+    var b = "";
+    if (n.has_parking) b += '<span class="r-badge">🅿️ 주차</span>';
+    if (n.has_room) b += '<span class="r-badge">🚪 룸</span>';
+    if (n.hangover_menu) b += '<span class="r-badge">🥣 해장</span>';
+    if (!b) return "";
+    return '<div class="r-badges">' + b + '</div>';
+  }
+
+  function hoursNoteHtml(p) {
+    var n = state.placeNotes[p.id];
+    if (!n || !n.hours_note) return "";
+    return '<div class="r-hours-note">🕒 ' + escapeHtml(n.hours_note) + '</div>';
+  }
+
   // 카카오 로컬 API는 장소 사진을 제공하지 않아서, 실제 썸네일 대신 카테고리별 아이콘으로 대체
   function catEmoji(catName) {
     var c = catName || "";
@@ -573,8 +651,13 @@
       if (state.dinnerBudget) statusMsg += " · 예산 " + state.dinnerBudget.toLocaleString("ko-KR") + "원 (참고용, 필터링 안 됨)";
     }
     $("#resultStatus").textContent = statusMsg;
+    state.lastResultsList = list;
+    state.lastResultsById = {};
+    list.forEach(function (p) { state.lastResultsById[p.id] = p; });
     if (list.length === 0) {
-      grid.innerHTML = '<div class="r-empty"><div class="big">🍽️</div>이 근처에서 조건에 맞는 곳을 찾지 못했어요.<br>다른 위치나 카테고리로 시도해보세요.</div>';
+      grid.innerHTML = state.filterEmptyByTag ?
+        '<div class="r-empty"><div class="big">🏷️</div>아직 주차장·룸 정보가 태그된 가게가 없어요.<br>가까운 가게를 직접 태그하면 다른 동료들에게도 도움이 돼요!</div>' :
+        '<div class="r-empty"><div class="big">🍽️</div>이 근처에서 조건에 맞는 곳을 찾지 못했어요.<br>다른 위치나 카테고리로 시도해보세요.</div>';
       return;
     }
     grid.innerHTML = list.map(function (p) {
@@ -592,7 +675,12 @@
             '<div class="r-cat">' + catShort(p.category_name) + '</div>' +
             '<div class="r-addr">' + (p.road_address_name || p.address_name) + '</div>' +
             '<div class="r-phone">' + (p.phone ? "📞 " + p.phone : "전화번호 정보 없음") + '</div>' +
-            '<a class="r-link-btn" href="' + p.place_url + '" target="_blank" rel="noopener">카카오맵에서 보기</a>' +
+            noteBadgesHtml(p) +
+            hoursNoteHtml(p) +
+            '<div class="r-btn-row">' +
+              '<a class="r-link-btn" href="' + p.place_url + '" target="_blank" rel="noopener">카카오맵에서 보기</a>' +
+              '<button type="button" class="r-info-btn" data-note="' + p.id + '">📝 정보 추가</button>' +
+            '</div>' +
           '</div>' +
         '</div>';
     }).join("");
@@ -600,10 +688,67 @@
 
   $("#resultGrid").addEventListener("click", function (e) {
     var favBtn = e.target.closest("[data-fav]");
-    if (!favBtn) return;
-    var id = favBtn.dataset.fav;
-    if (state.favorites.has(id)) state.favorites.delete(id); else state.favorites.add(id);
-    favBtn.setAttribute("aria-pressed", state.favorites.has(id));
-    favBtn.querySelector("svg").setAttribute("fill", state.favorites.has(id) ? "currentColor" : "none");
+    if (favBtn) {
+      var id = favBtn.dataset.fav;
+      if (state.favorites.has(id)) state.favorites.delete(id); else state.favorites.add(id);
+      favBtn.setAttribute("aria-pressed", state.favorites.has(id));
+      favBtn.querySelector("svg").setAttribute("fill", state.favorites.has(id) ? "currentColor" : "none");
+      return;
+    }
+    var noteBtn = e.target.closest("[data-note]");
+    if (noteBtn) {
+      var pid = noteBtn.dataset.note;
+      var place = state.lastResultsById[pid];
+      if (place) openPlaceNoteModal(place);
+      return;
+    }
+  });
+
+  /* ---------- 가게 정보 추가 모달 (크라우드소싱 입력) ---------- */
+  function openPlaceNoteModal(place) {
+    if (!currentUser) {
+      toast("정보 추가는 로그인 후 이용할 수 있어요.");
+      authMode = "login"; renderAuth();
+      $("#authEmail").value = ""; $("#authPassword").value = "";
+      $("#authModal").hidden = false;
+      return;
+    }
+    state.activeNotePlace = place;
+    $("#placeNoteTarget").textContent = place.place_name + " · " + (place.road_address_name || place.address_name || "");
+    var existing = state.placeNotes[place.id] || {};
+    $("#pnParking").checked = !!existing.has_parking;
+    $("#pnRoom").checked = !!existing.has_room;
+    $("#pnHangover").checked = !!existing.hangover_menu;
+    $("#pnHours").value = existing.hours_note || "";
+    $("#placeNoteModal").hidden = false;
+  }
+
+  $("#closePlaceNote").addEventListener("click", function () { $("#placeNoteModal").hidden = true; });
+  $("#placeNoteModal").addEventListener("click", function (e) { if (e.target === e.currentTarget) e.currentTarget.hidden = true; });
+
+  $("#pnSaveBtn").addEventListener("click", function () {
+    if (!sb || !currentUser || !state.activeNotePlace) { toast("정보 추가는 로그인 후 이용할 수 있어요."); return; }
+    var place = state.activeNotePlace;
+    var payload = {
+      user_id: currentUser.id,
+      place_id: place.id,
+      place_name: place.place_name,
+      has_parking: $("#pnParking").checked,
+      has_room: $("#pnRoom").checked,
+      hangover_menu: $("#pnHangover").checked,
+      hours_note: $("#pnHours").value.trim() || null
+    };
+    sb.from("place_notes").upsert(payload, { onConflict: "place_id,user_id" }).then(function (res) {
+      if (res.error) { toast("저장 실패: " + res.error.message); return; }
+      toast("정보를 공유해주셔서 감사해요!");
+      $("#placeNoteModal").hidden = true;
+      var agg = state.placeNotes[place.id] || { has_parking: false, has_room: false, hangover_menu: false, hours_note: null };
+      if (payload.has_parking) agg.has_parking = true;
+      if (payload.has_room) agg.has_room = true;
+      if (payload.hangover_menu) agg.hangover_menu = true;
+      if (payload.hours_note) agg.hours_note = payload.hours_note;
+      state.placeNotes[place.id] = agg;
+      renderResultList(state.lastResultsList || []);
+    });
   });
 })();
