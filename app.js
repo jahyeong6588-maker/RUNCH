@@ -25,6 +25,7 @@
     map: null,
     markers: [],
     parkingMarkers: [],
+    showParking: false,
     searchMode: "meal",     // "meal" | "dinner"
     timeOfDay: "lunch",     // "lunch" | "evening"
     dinnerBudget: null,
@@ -610,7 +611,7 @@
     var section = $("#parkingSection");
     var row = $("#parkingRow");
     clearParkingMarkers();
-    if (!state.office) { section.hidden = true; return; }
+    if (!state.showParking || !state.office) { section.hidden = true; return; }
     var region = regionKeyFromAddress(state.office.address);
     loadParkingRegion(region, function (list) {
       if (!list.length) { section.hidden = true; return; }
@@ -671,6 +672,18 @@
     renderResultList(list);
     renderNearbyParking();
   }
+
+  function syncParkingToggleUI() {
+    var btn = $("#parkingToggleBtn");
+    btn.setAttribute("aria-pressed", String(state.showParking));
+    btn.textContent = state.showParking ? "🅿️ 주차장 숨기기" : "🅿️ 주차장 보기";
+  }
+  $("#parkingToggleBtn").addEventListener("click", function () {
+    state.showParking = !state.showParking;
+    syncParkingToggleUI();
+    renderNearbyParking();
+  });
+
   $("#closeResults").addEventListener("click", function () { $("#resultsModal").hidden = true; });
   $("#resultsModal").addEventListener("click", function (e) { if (e.target === e.currentTarget) e.currentTarget.hidden = true; });
 
