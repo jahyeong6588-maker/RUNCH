@@ -246,6 +246,16 @@ footer .wrap{ font-size:12px; opacity:.7; }
 .r-empty{ text-align:center; padding:50px 10px; color:var(--ink-soft); grid-column:1/-1; }
 .r-empty .big{ font-size:34px; margin-bottom:10px; }
 
+.parking-section{ margin-top:20px; padding-top:18px; border-top:1px solid var(--border); }
+.parking-head{ display:flex; align-items:baseline; gap:8px; margin-bottom:4px; }
+.parking-head h4{ font-size:14px; font-weight:800; margin:0; }
+.parking-sub{ font-size:11px; color:var(--ink-faint); margin:0 0 12px; }
+.parking-row{ display:flex; gap:12px; overflow-x:auto; padding-bottom:4px; }
+.parking-card{ flex:0 0 200px; border:1px solid var(--border); border-radius:var(--radius-md); padding:11px 12px; background:var(--surface-2); }
+.parking-card .p-name{ font-weight:700; font-size:12.5px; margin-bottom:4px; }
+.parking-card .p-meta{ font-size:11px; color:var(--ink-soft); line-height:1.5; }
+.parking-card .p-dist{ display:inline-block; background:var(--accent); color:var(--accent-ink); font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:999px; margin-bottom:6px; }
+
 .toast{ position:fixed; left:50%; bottom:36px; transform:translateX(-50%) translateY(10px); background:var(--btn-strong-bg); color:var(--btn-strong-text); font-size:13.5px; font-weight:500; padding:12px 20px; border-radius:999px; opacity:0; pointer-events:none; z-index:200; transition:opacity .18s ease, transform .18s ease; box-shadow:var(--shadow-lg); white-space:nowrap; max-width:88vw; overflow:hidden; text-overflow:ellipsis; }
 .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 

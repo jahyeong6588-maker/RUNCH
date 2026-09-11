@@ -552,6 +552,77 @@
     });
   }
 
+  /* ---------- 근처 공영주차장 (국토교통부 전국주차장정보표준데이터, 공공데이터) ----------
+     반기별로 갱신되는 정적 데이터라 지역(시/도)별 JSON 파일로 나눠 assets/data/parking/에 두고,
+     검색된 회사 위치의 지역만 불러와서 거리순으로 보여줘요. */
+  var PARKING_DATA_BASE = "./assets/data/parking/";
+  var parkingCache = {};
+
+  function regionKeyFromAddress(addr) {
+    return (addr || "").trim().split(" ")[0] || "";
+  }
+
+  function haversineM(lat1, lng1, lat2, lng2) {
+    var R = 6371000;
+    var toRad = function (d) { return d * Math.PI / 180; };
+    var dLat = toRad(lat2 - lat1);
+    var dLng = toRad(lng2 - lng1);
+    var a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  function loadParkingRegion(region, onDone) {
+    if (!region) { onDone([]); return; }
+    if (parkingCache[region]) { onDone(parkingCache[region]); return; }
+    fetch(PARKING_DATA_BASE + encodeURIComponent(region) + ".json")
+      .then(function (res) { if (!res.ok) throw new Error("no data for region"); return res.json(); })
+      .then(function (data) { parkingCache[region] = data; onDone(data); })
+      .catch(function () { parkingCache[region] = []; onDone([]); });
+  }
+
+  function feeSummary(fee) {
+    if (!fee) return "";
+    if (fee.type === "무료") return "무료";
+    if (fee.baseFee) {
+      var s = fee.baseMin + "분 " + Number(fee.baseFee).toLocaleString("ko-KR") + "원";
+      if (fee.addFee) s += " (추가 " + fee.addMin + "분당 " + Number(fee.addFee).toLocaleString("ko-KR") + "원)";
+      return s;
+    }
+    return fee.type || "요금 정보 없음";
+  }
+
+  function renderNearbyParking() {
+    var section = $("#parkingSection");
+    var row = $("#parkingRow");
+    if (!state.office) { section.hidden = true; return; }
+    var region = regionKeyFromAddress(state.office.address);
+    loadParkingRegion(region, function (list) {
+      if (!list.length) { section.hidden = true; return; }
+      var withDist = list.map(function (p) {
+        return { p: p, dist: Math.round(haversineM(state.office.lat, state.office.lng, p.lat, p.lng)) };
+      }).filter(function (x) { return x.dist <= 1200; });
+      withDist.sort(function (a, b) { return a.dist - b.dist; });
+      withDist = withDist.slice(0, 8);
+      if (!withDist.length) { section.hidden = true; return; }
+      section.hidden = false;
+      row.innerHTML = withDist.map(function (x) {
+        var p = x.p;
+        var lines = [];
+        if (p.spots) lines.push(p.spots + "면");
+        var fee = feeSummary(p.fee);
+        if (fee) lines.push(fee);
+        if (p.disabled === "Y") lines.push("장애인 구역 있음");
+        return '' +
+          '<div class="parking-card">' +
+            '<span class="p-dist">' + x.dist + 'm</span>' +
+            '<div class="p-name">' + escapeHtml(p.n) + '</div>' +
+            '<div class="p-meta">' + escapeHtml(lines.join(" · ")) + '</div>' +
+          '</div>';
+      }).join("");
+    });
+  }
+
   /* ---------- 결과 모달 + 지도 ---------- */
   function syncCafeSegUI() {
     $$("#cafeSeg button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.seg === state.cafeSeg)); });
@@ -568,6 +639,7 @@
     $("#resultsModal").hidden = false;
     renderMap(list);
     renderResultList(list);
+    renderNearbyParking();
   }
   $("#closeResults").addEventListener("click", function () { $("#resultsModal").hidden = true; });
   $("#resultsModal").addEventListener("click", function (e) { if (e.target === e.currentTarget) e.currentTarget.hidden = true; });
