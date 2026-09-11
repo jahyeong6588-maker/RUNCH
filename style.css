@@ -70,8 +70,12 @@ header .bar{ display:flex; align-items:center; justify-content:space-between; ga
 .logo-group .logo{ font-weight:900; font-size:21px; }
 .logo-group .tag{ font-size:12.5px; color:var(--ink-faint); }
 .header-right{ display:flex; align-items:center; gap:18px; }
-.loc-pill{ display:flex; align-items:center; gap:5px; font-size:13.5px; color:var(--ink-soft); }
+.loc-pill{ display:flex; align-items:center; gap:5px; font-size:13.5px; color:var(--ink-soft); border:none; background:none; cursor:pointer; font-family:inherit; padding:6px 4px; border-radius:var(--radius-md); }
+.loc-pill:hover{ background:var(--surface-2); color:var(--ink); }
 .loc-pill svg{ width:15px; height:15px; color:var(--accent); flex-shrink:0; }
+.boss-key-btn{ border:1px solid var(--border); background:var(--surface); color:var(--ink-faint); width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; }
+.boss-key-btn:hover{ color:var(--ink); border-color:var(--ink-faint); }
+.boss-key-btn svg{ width:15px; height:15px; }
 .menu-link{ font-size:13.5px; font-weight:700; background:none; border:none; cursor:pointer; color:var(--ink); display:none; }
 .btn-pill-strong{ background:var(--btn-strong-bg); color:var(--btn-strong-text); border:none; border-radius:999px; padding:10px 20px; font-weight:700; font-size:13.5px; cursor:pointer; }
 @media (min-width:640px){ .menu-link{ display:inline-block; } }
@@ -241,3 +245,24 @@ footer .wrap{ font-size:12px; opacity:.7; }
   .search-card{ padding:20px; }
   .modal-card{ padding:18px; }
 }
+
+/* ---------- 화면 전환(보스키) 엑셀 모드 ---------- */
+.xmode-overlay{
+  position:fixed; inset:0; z-index:9999; background:#FFFFFF; color:#1F1F1F;
+  font-family:"Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+  display:flex; flex-direction:column;
+}
+.xmode-ribbon{ background:#217346; color:#fff; flex-shrink:0; }
+.xmode-titlebar{ padding:6px 14px; font-size:12.5px; background:#1c5f3a; }
+.xmode-tabs{ padding:7px 14px; font-size:12.5px; background:#217346; border-bottom:1px solid rgba(255,255,255,.15); }
+.xmode-formulabar{ background:#fff; color:#333; display:flex; align-items:center; gap:14px; padding:6px 14px; border-bottom:1px solid #d0d0d0; font-size:12px; }
+.xmode-cellref{ border:1px solid #c8c8c8; border-radius:2px; padding:2px 10px; font-weight:700; min-width:40px; }
+.xmode-fx{ font-style:italic; color:#217346; font-weight:700; }
+.xmode-sheet{ flex:1; overflow:auto; background:#fff; }
+.xmode-sheet table{ border-collapse:collapse; width:100%; font-size:12.5px; }
+.xmode-sheet th, .xmode-sheet td{ border:1px solid #d9d9d9; padding:6px 10px; text-align:left; min-width:90px; }
+.xmode-sheet thead th{ background:#f3f3f3; text-align:center; color:#555; font-weight:700; min-width:90px; }
+.xmode-sheet tbody th{ background:#f3f3f3; text-align:center; color:#555; font-weight:700; width:34px; min-width:34px; }
+.xmode-sheet td.xh{ font-weight:700; background:#f8f8f8; }
+.xmode-sheet td.xsel{ background:#e3f0e9; outline:2px solid #217346; outline-offset:-2px; }
+.xmode-sheettabs{ background:#f3f3f3; border-top:1px solid #d9d9d9; padding:8px 14px; font-size:12px; color:#444; flex-shrink:0; }

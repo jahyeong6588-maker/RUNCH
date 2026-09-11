@@ -23,7 +23,9 @@
     favorites: new Set(),
     lastSearchKind: null, // for the "다시 추천받기" shuffle tag
     map: null,
-    markers: []
+    markers: [],
+    dinnerTime: "evening",
+    dinnerBudget: null
   };
 
   var geocoder = null;
@@ -39,9 +41,45 @@
       geocoder = new kakao.maps.services.Geocoder();
       places = new kakao.maps.services.Places();
       kakaoReady = true;
+      useCurrentLocation({ silent: true });
     });
   }
   initKakao();
+
+  /* ---------- 현재 위치 연동 ---------- */
+  function shortAddr(addr) {
+    var parts = (addr || "").split(" ");
+    return parts.slice(0, 2).join(" ") || addr;
+  }
+
+  function useCurrentLocation(opts) {
+    opts = opts || {};
+    if (!navigator.geolocation) {
+      if (!opts.silent) toast("이 브라우저는 위치 정보를 지원하지 않아요.");
+      return;
+    }
+    if (!opts.silent) toast("현재 위치를 확인하는 중이에요…");
+    navigator.geolocation.getCurrentPosition(function (pos) {
+      var lat = pos.coords.latitude, lng = pos.coords.longitude;
+      if (!kakaoReady) { if (!opts.silent) toast("카카오맵을 불러오는 중이에요. 잠시 후 다시 시도해주세요."); return; }
+      geocoder.coord2Address(lng, lat, function (result, status) {
+        var addr = "현재 위치";
+        if (status === kakao.maps.services.Status.OK && result.length) {
+          var r = result[0];
+          addr = (r.road_address && r.road_address.address_name) || (r.address && r.address.address_name) || addr;
+        }
+        state.office = { lat: lat, lng: lng, address: addr };
+        $("#locationInput").value = addr;
+        $("#resolvedLoc").textContent = "📍 " + addr + " (현재 위치)";
+        $("#headerLocText").textContent = shortAddr(addr);
+        if (!opts.silent) toast("현재 위치로 설정했어요.");
+      });
+    }, function () {
+      if (!opts.silent) toast("위치 권한이 없어서 현재 위치를 가져오지 못했어요. 브라우저 설정에서 위치 접근을 허용해주세요.");
+    }, { enableHighAccuracy: true, timeout: 8000 });
+  }
+
+  $("#locPillBtn").addEventListener("click", function () { useCurrentLocation({ silent: false }); });
 
   /* ---------- 회사 위치 검색 (Geocoder → Places 폴백) ---------- */
   function resolveOffice(query, onDone) {
@@ -158,6 +196,9 @@
     } else if (kind === "cafe") {
       state.cafeSeg = "only"; syncCafeSegUI();
       tasks.push(searchOnce(function (cb) { places.categorySearch(CAT_CAFE, cb, opts); }));
+    } else if (kind === "dinner") {
+      var dinnerKw = (state.dinnerTime === "lunch" ? "점심 회식" : "저녁 회식") + " 맛집";
+      tasks.push(searchOnce(function (cb) { places.keywordSearch(dinnerKw, cb, Object.assign({ category_group_code: CAT_FOOD }, opts)); }));
     } else {
       if (wantFood()) {
         if (!anyCat) {
@@ -202,6 +243,33 @@
     });
   });
   $("#menuLink").addEventListener("click", function () { toast("커뮤니티는 다음 업데이트에서 만나요"); });
+
+  /* ---------- 회식 장소 찾기 모드 ---------- */
+  $("#openDinnerMode").addEventListener("click", function () { $("#dinnerModal").hidden = false; });
+  $("#closeDinner").addEventListener("click", function () { $("#dinnerModal").hidden = true; });
+  $("#dinnerModal").addEventListener("click", function (e) { if (e.target === e.currentTarget) e.currentTarget.hidden = true; });
+  $$("#dinnerTimeSeg button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      state.dinnerTime = b.dataset.seg;
+      $$("#dinnerTimeSeg button").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+    });
+  });
+  $("#dinnerSearchBtn").addEventListener("click", function () {
+    state.dinnerBudget = $("#dinnerBudget").value ? Number($("#dinnerBudget").value) : null;
+    $("#dinnerModal").hidden = true;
+    runSearch("dinner");
+  });
+
+  /* ---------- 화면 전환 (보스키 / 엑셀 모드) ---------- */
+  function toggleExcelMode(force) {
+    var el = $("#excelOverlay");
+    el.hidden = (typeof force === "boolean") ? !force : !el.hidden;
+  }
+  $("#bossKeyBtn").addEventListener("click", function () { toggleExcelMode(); });
+  $("#excelOverlay").addEventListener("click", function () { toggleExcelMode(false); });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") toggleExcelMode();
+  });
 
   /* ---------- 인증 (Supabase Auth) ---------- */
   var authMode = "login";
@@ -481,19 +549,39 @@
     return parts[parts.length - 1] || catName || "";
   }
 
+  // 카카오 로컬 API는 장소 사진을 제공하지 않아서, 실제 썸네일 대신 카테고리별 아이콘으로 대체
+  function catEmoji(catName) {
+    var c = catName || "";
+    if (c.indexOf("카페") > -1 || c.indexOf("디저트") > -1) return "☕";
+    if (c.indexOf("술집") > -1 || c.indexOf("호프") > -1 || c.indexOf("포차") > -1) return "🍻";
+    if (c.indexOf("고기") > -1 || c.indexOf("삼겹") > -1 || c.indexOf("갈비") > -1) return "🥩";
+    if (c.indexOf("일식") > -1 || c.indexOf("초밥") > -1 || c.indexOf("돈까스") > -1) return "🍣";
+    if (c.indexOf("중식") > -1) return "🥟";
+    if (c.indexOf("양식") > -1 || c.indexOf("파스타") > -1 || c.indexOf("피자") > -1) return "🍝";
+    if (c.indexOf("분식") > -1) return "🍢";
+    if (c.indexOf("치킨") > -1) return "🍗";
+    if (c.indexOf("국밥") > -1 || c.indexOf("찌개") > -1 || c.indexOf("탕") > -1 || c.indexOf("전골") > -1) return "🍲";
+    if (c.indexOf("회") > -1 || c.indexOf("해물") > -1) return "🐟";
+    return "🍽️";
+  }
+
   function renderResultList(list) {
     var grid = $("#resultGrid");
-    $("#resultStatus").textContent = state.office.address + " 기준 반경 1km · " + list.length + "곳 (카카오맵 실시간 데이터)";
+    var statusMsg = state.office.address + " 기준 반경 1km · " + list.length + "곳 (카카오맵 실시간 데이터)";
+    if (state.lastSearchKind === "dinner") {
+      statusMsg += " · " + (state.dinnerTime === "lunch" ? "점심 회식" : "저녁 회식");
+      if (state.dinnerBudget) statusMsg += " · 예산 " + state.dinnerBudget.toLocaleString("ko-KR") + "원 (참고용, 필터링 안 됨)";
+    }
+    $("#resultStatus").textContent = statusMsg;
     if (list.length === 0) {
       grid.innerHTML = '<div class="r-empty"><div class="big">🍽️</div>이 근처에서 조건에 맞는 곳을 찾지 못했어요.<br>다른 위치나 카테고리로 시도해보세요.</div>';
       return;
     }
     grid.innerHTML = list.map(function (p) {
       var favored = state.favorites.has(p.id);
-      var isCafe = p.category_group_code === "CE7";
       return '' +
         '<div class="r-card">' +
-          '<div class="r-photo">' + (isCafe ? "☕" : "🍽️") +
+          '<div class="r-photo">' + catEmoji(p.category_name) +
             '<button class="fav-btn" data-fav="' + p.id + '" aria-pressed="' + favored + '" aria-label="즐겨찾기">' +
               '<svg viewBox="0 0 24 24" fill="' + (favored ? "currentColor" : "none") + '" stroke="currentColor" stroke-width="2"><path d="M12 3l2.6 5.9 6.4.6-4.8 4.3 1.4 6.3L12 17l-5.6 3.1 1.4-6.3-4.8-4.3 6.4-.6z"/></svg>' +
             '</button>' +

@@ -18,10 +18,10 @@
       <span class="tag">Lunch Recommendation Assistant</span>
     </div>
     <div class="header-right">
-      <span class="loc-pill">
+      <button type="button" class="loc-pill" id="locPillBtn" aria-label="현재 위치 사용">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3"><path d="M12 21s7-6.1 7-11.5A7 7 0 0 0 5 9.5C5 14.9 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.4"/></svg>
-        광주광역시 광산구
-      </span>
+        <span id="headerLocText">광주광역시 광산구</span>
+      </button>
       <button class="menu-link" id="calendarLink">캘린더</button>
       <button class="menu-link" id="menuLink">커뮤니티</button>
       <button class="btn-pill-strong" id="openLogin">로그인</button>
@@ -29,6 +29,9 @@
         <span id="userEmail"></span>
         <button id="logoutBtn">로그아웃</button>
       </div>
+      <button type="button" class="boss-key-btn" id="bossKeyBtn" aria-label="화면 전환" title="화면 전환 (Esc)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="4" width="18" height="16" rx="1.5"/><path d="M3 9h18M9 9v11"/></svg>
+      </button>
     </div>
   </div>
 </header>
@@ -46,6 +49,7 @@
         <button class="tagchip" data-quick-tag="soup">🍲 오늘같은 날은 국물</button>
         <button class="tagchip" data-quick-tag="cafe">☕ 커피 한잔 하기 좋은 곳</button>
         <button class="tagchip" data-quick-tag="shuffle">🔄 다시 추천받기</button>
+        <button class="tagchip" id="openDinnerMode">🍻 회식 장소 찾기</button>
       </div>
 
       <button class="hangover-banner" id="hangoverBanner" hidden></button>
@@ -211,6 +215,58 @@
       </div>
     </div>
   </div>
+</div>
+
+<!-- 회식 모드 MODAL -->
+<div class="modal-backdrop" id="dinnerModal" hidden>
+  <div class="modal-card narrow">
+    <div class="modal-head">
+      <h3>🍻 회식 장소 찾기</h3>
+      <button class="close-x" id="closeDinner" aria-label="닫기">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="field-label" style="margin-top:0;">시간대</div>
+    <div class="seg-3" id="dinnerTimeSeg" role="radiogroup" aria-label="시간대">
+      <button data-seg="evening" aria-pressed="true">저녁 회식</button>
+      <button data-seg="lunch" aria-pressed="false">점심 회식</button>
+    </div>
+    <div class="field-label">총 회식비 (선택)</div>
+    <input type="number" id="dinnerBudget" class="cal-input" placeholder="예: 300000" inputmode="numeric" aria-label="총 회식비">
+    <p class="field-note">카카오맵은 가격 정보를 제공하지 않아 예산으로 걸러내진 못해요 — 참고용으로만 기록돼요.</p>
+    <button type="button" class="btn-accent-full" id="dinnerSearchBtn">회식 장소 찾기</button>
+  </div>
+</div>
+
+<!-- 화면 전환(보스키) 오버레이 -->
+<div class="xmode-overlay" id="excelOverlay" hidden>
+  <div class="xmode-ribbon">
+    <div class="xmode-titlebar">
+      <span class="xmode-fileicon">📗</span> 구매내역_정산.xlsx - Excel
+    </div>
+    <div class="xmode-tabs">파일 &nbsp; 홈 &nbsp; 삽입 &nbsp; 페이지 레이아웃 &nbsp; 수식 &nbsp; 데이터 &nbsp; 검토 &nbsp; 보기</div>
+    <div class="xmode-formulabar"><span class="xmode-cellref">B4</span><span class="xmode-fx">fx</span></div>
+  </div>
+  <div class="xmode-sheet">
+    <table>
+      <thead>
+        <tr><th></th><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th></tr>
+      </thead>
+      <tbody>
+        <tr><th>1</th><td></td><td class="xh">번호</td><td class="xh">품목</td><td class="xh">수량</td><td class="xh">단가</td></tr>
+        <tr><th>2</th><td></td><td>1</td><td>사무용품</td><td>12</td><td>3,200</td></tr>
+        <tr><th>3</th><td></td><td>2</td><td>복합기 토너</td><td>2</td><td>68,000</td></tr>
+        <tr><th>4</th><td></td><td class="xsel">3</td><td class="xsel">A4 용지</td><td>10</td><td>4,500</td></tr>
+        <tr><th>5</th><td></td><td>4</td><td>케이블</td><td>5</td><td>7,900</td></tr>
+        <tr><th>6</th><td></td><td>5</td><td>청소용품</td><td>8</td><td>2,300</td></tr>
+        <tr><th>7</th><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><th>8</th><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><th>9</th><td></td><td></td><td></td><td></td><td></td></tr>
+        <tr><th>10</th><td></td><td></td><td></td><td></td><td></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="xmode-sheettabs">Sheet1 &nbsp; Sheet2 &nbsp; Sheet3 &nbsp; +</div>
 </div>
 
 <div class="toast" id="toast"></div>
